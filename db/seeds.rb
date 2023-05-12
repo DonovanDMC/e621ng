@@ -39,6 +39,8 @@ end
 
 admin = create_user("admin", User::Levels::ADMIN, 2.weeks.ago) { |user| apply_flags(user) }
 create_user("admin_new", User::Levels::ADMIN) { |user| apply_flags(user) }
+create_user("bd_admin", User::Levels::ADMIN, 2.weeks.ago) { |user| apply_flags(user); user.is_bd_staff = true }
+create_user("bd_admin_new", User::Levels::ADMIN) { |user| apply_flags(user); user.is_bd_staff = true }
 create_user(Danbooru.config.system_user, User::Levels::JANITOR, 2.weeks.ago) { |user| apply_flags(user) }
 create_user("moderator", User::Levels::MODERATOR)
 create_user("moderator_old", User::Levels::MODERATOR, 2.weeks.ago)
