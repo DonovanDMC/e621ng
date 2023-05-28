@@ -138,7 +138,7 @@ class ForumTopic < ApplicationRecord
   end
 
   def visible?(user)
-    return false if is_hidden && !can_hide?(user)
+    return false if is_hidden && !(user.is_moderator? || user.id == creator.id)
     user.level >= category.can_view
   end
 
@@ -147,7 +147,7 @@ class ForumTopic < ApplicationRecord
   end
 
   def can_hide?(user)
-    user.is_moderator? || user.id == creator_id
+    user.is_moderator? || original_post.tag_change_request.nil? && user.id == creator_id
   end
 
   def can_delete?(user)

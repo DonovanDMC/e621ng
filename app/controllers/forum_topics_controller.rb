@@ -66,6 +66,7 @@ class ForumTopicsController < ApplicationController
 
   def hide
     check_privilege(@forum_topic)
+    raise User::PrivilegeError unless CurrentUser.is_moderator? || @forum_topic.original_post.tag_change_request.nil?
     @forum_topic.hide!
     @forum_topic.create_mod_action_for_hide
     flash[:notice] = "Topic hidden"
