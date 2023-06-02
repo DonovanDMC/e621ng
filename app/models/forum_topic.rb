@@ -1,6 +1,7 @@
 class ForumTopic < ApplicationRecord
   belongs_to_creator
   belongs_to_updater
+  simple_versioning subject_column: :title
   belongs_to :category, class_name: "ForumCategory", foreign_key: :category_id
   has_many :posts, -> {order("forum_posts.id asc")}, :class_name => "ForumPost", :foreign_key => "topic_id", :dependent => :destroy
   has_one :original_post, -> {order("forum_posts.id asc")}, class_name: "ForumPost", foreign_key: "topic_id", inverse_of: :topic

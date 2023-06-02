@@ -71,7 +71,12 @@
           <% end %>
           <% if CurrentUser.is_moderator? %>
             <li>|</li>
-            <li><%= link_to "Show Edits", edit_history_path(id: forum_post.id, type: 'ForumPost') %></li>
+            <% if forum_post.is_original_post?(original_forum_post_id) %>
+                <li><%= link_to "Show Post Edits", edit_history_path(id: forum_post.id, type: "ForumPost") %></li>
+                <li><%= link_to "Show Topic Edits", edit_history_path(id: @forum_topic.id, type: "ForumTopic") %></li>
+              <% else %>
+                <li><%= link_to "Show Edits", edit_history_path(id: forum_post.id, type: "ForumPost") %></li>
+              <% end %>
             <%= render "user_warnable/buttons", model: forum_post %>
           <% end %>
           <% if CurrentUser.is_admin? %>

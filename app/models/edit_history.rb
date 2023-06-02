@@ -3,12 +3,6 @@ class EditHistory < ApplicationRecord
   belongs_to :versionable, polymorphic: true
   belongs_to :user
 
-  TYPE_MAP = {
-    comment: "Comment",
-    forum: "ForumPost",
-    blip: "Blip",
-  }.freeze
-
   EDIT_MAP = {
     hide: "Hidden",
     unhide: "Unhidden",
@@ -18,12 +12,15 @@ class EditHistory < ApplicationRecord
     wark_record: "Marked For Record",
     mark_ban: "Marked For Ban",
     unmark: "Unmarked",
+    lock: "Locked",
+    unlock: "Unlocked",
   }.freeze
 
   KNOWN_TYPES = %i[
     comment
     forum_post
     blip
+    forum_topic
   ].freeze
 
   KNOWN_EDIT_TYPES = %i[
@@ -35,6 +32,8 @@ class EditHistory < ApplicationRecord
     mark_record
     mark_ban
     unmark
+    lock
+    unlock
   ].freeze
 
   def pretty_edit_type
@@ -47,6 +46,10 @@ class EditHistory < ApplicationRecord
   end
 
   def text_content
+    if is_contentful?
+      return subject if versionable_type == "ForumTopic" && subject.present?
+      body
+    end
     EDIT_MAP[edit_type.to_sym] || pretty_edit_type
   end
 
@@ -56,7 +59,7 @@ class EditHistory < ApplicationRecord
 
   def page(limit = 20)
     limit = limit.to_i
-    return 1 if limit <= 0
+    return 1 if limit < 1
     (version / limit).ceil + 1
   end
 
