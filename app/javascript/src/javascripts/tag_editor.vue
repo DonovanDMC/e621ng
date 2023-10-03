@@ -10,11 +10,11 @@
         <div class="related-tag-functions">
             Related:
             <a href="#" @click.prevent="findRelated()">Tags</a> |
-            <a href="#" @click.prevent="findRelated('artist')">Artists</a> |
-            <a href="#" @click.prevent="findRelated('copyright')">Copyrights</a> |
-            <a href="#" @click.prevent="findRelated('char')">Characters</a> |
-            <a href="#" @click.prevent="findRelated('species')">Species</a> |
-            <a href="#" @click.prevent="findRelated('meta')">Metatags</a> |
+            <a href="#" @click.prevent="findRelated(1)">Artists</a> |
+            <a href="#" @click.prevent="findRelated(3)">Copyrights</a> |
+            <a href="#" @click.prevent="findRelated(4)">Characters</a> |
+            <a href="#" @click.prevent="findRelated(5)">Species</a> |
+            <a href="#" @click.prevent="findRelated(7)">Metatags</a> |
             <a href="#" @click.prevent="previewFinalTags">Preview Final Tags</a>
         </div>
         <div>
@@ -35,7 +35,7 @@
   import Utility from "./utility.js";
 
   function tagSorter(a, b) {
-    return a[0] > b[0] ? 1 : -1;
+    return a.name > b.name ? 1 : -1;
   }
 
   export default {
@@ -144,7 +144,7 @@
           }
         })
       },
-      findRelated(type) {
+      findRelated(categoryId) {
         const self = this;
         self.expandRelated = true;
         const convertResponse = function (respData) {
@@ -172,8 +172,8 @@
         const selectedTags = getSelectedTags();
         const params = selectedTags ? {query: selectedTags} : {query: this.tags};
 
-        if (type)
-          params['category'] = type;
+        if (categoryId)
+          params['category_id'] = categoryId;
         $.ajax("/related_tag/bulk.json", {
           method: 'POST',
           type: 'POST',

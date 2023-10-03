@@ -1,6 +1,6 @@
 module Admin
   class ReownerController < ApplicationController
-    before_action :bd_staff_only
+    before_action :is_bd_staff_only
 
     def new
     end
@@ -17,14 +17,13 @@ module Admin
       end
 
       moved_post_ids = []
-      Post.tag_match("user:!#{@old_user.id} #{query}").limit(300).records.each do |p|
+      Post.tag_match("user:!#{@old_user.id} #{query}").limit(300).each do |p|
         moved_post_ids << p.id
         p.do_not_version_changes = true
         p.update({ uploader_id: @new_user.id })
         p.versions.where(updater_id: @old_user.id).each do |pv|
           pv.update_column(:updater_id, @new_user.id)
-          pv.reload
-          pv.__elasticsearch__.index_document
+          pv.update_index
         end
       end
 
@@ -37,10 +36,6 @@ module Admin
 
     def new_params
       params.require(:reowner).permit(%i[old_owner search new_owner])
-    end
-
-    def bd_staff_only
-      access_denied unless CurrentUser.is_bd_staff?
     end
   end
 end

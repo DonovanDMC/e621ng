@@ -32,13 +32,13 @@ class TagNameValidator < ActiveModel::EachValidator
       record.errors.add(attribute, "'#{value}' cannot contain non-printable characters")
     when /\A[-~+_`(){}\[\]\/]/
       record.errors.add(attribute, "'#{value}' cannot begin with a '#{value[0]}'")
-    when /\A(#{Tag::METATAGS.join("|")}):(.+)\z/i
+    when /\A(#{TagQuery::METATAGS.join("|")}):(.+)\z/i
       record.errors.add(attribute, "'#{value}' cannot begin with '#{$1}:'")
     when /\A(#{Tag.categories.regexp}):(.+)\z/i
       record.errors.add(attribute, "'#{value}' cannot begin with '#{$1}:'")
     end
 
-    if normalized =~ /[^[:ascii:]é]/ && !options[:disable_ascii_check] == true
+    if normalized =~ /[^[:ascii:]]/ && !options[:disable_ascii_check] == true
       record.errors.add(attribute,  "'#{value}' must consist of only ASCII characters")
     end
   end

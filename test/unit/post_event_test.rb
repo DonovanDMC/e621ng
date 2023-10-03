@@ -70,13 +70,13 @@ class PostEventTest < ActiveSupport::TestCase
         @post.save
       end
 
-      assert_post_events_created(@admin, :comment_disabled) do
-        @post.is_comment_disabled = true
+      assert_post_events_created(@admin, :comment_locked) do
+        @post.is_comment_locked = true
         @post.save
       end
 
-      assert_post_events_created(@admin, :comment_enabled) do
-        @post.is_comment_disabled = false
+      assert_post_events_created(@admin, :comment_unlocked) do
+        @post.is_comment_locked = false
         @post.save
       end
 
@@ -92,20 +92,6 @@ class PostEventTest < ActiveSupport::TestCase
 
       assert_post_events_created(@admin, :expunged) do
         @post.expunge!
-      end
-    end
-
-    context "unflag on approve" do
-      setup do
-        as @janitor do
-          create(:post_flag, post: @post)
-        end
-      end
-
-      should "create both post events" do
-        assert_post_events_created(@janitor, [:flag_removed, :approved]) do
-          @post.approve!(@janitor, resolve_flags: true)
-        end
       end
     end
 

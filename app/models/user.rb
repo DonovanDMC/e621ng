@@ -16,10 +16,7 @@ class User < ApplicationRecord
 
   # Used for `before_action :<role>_only`. Must have a corresponding `is_<role>?` method.
   Roles = Levels.constants.map(&:downcase) + [
-    :banned,
     :approver,
-    :voter,
-    :verified,
   ]
 
   # candidates for removal:
@@ -101,9 +98,9 @@ class User < ApplicationRecord
   has_many :posts, :foreign_key => "uploader_id"
   has_many :post_approvals, :dependent => :destroy
   has_many :post_disapprovals, :dependent => :destroy
+  has_many :post_replacements, foreign_key: :creator_id
   has_many :post_votes
   has_many :post_versions
-  has_many :note_versions
   has_many :bans, -> { order("bans.id desc") }
   has_many :staff_notes, -> { order("staff_notes.id desc") }
   has_one :recent_ban, -> { order("bans.id desc") }, class_name: "Ban"
@@ -200,7 +197,7 @@ class User < ApplicationRecord
 
     def update_cache
       Cache.write("uin:#{id}", name, expires_in: 4.hours)
-      Cache.write("uni:#{name}", id, expires_in: 4.hours)
+      Cache.write("uni:#{User.normalize_name(name)}", id, expires_in: 4.hours)
     end
   end
 
@@ -323,10 +320,6 @@ class User < ApplicationRecord
       end
     end
 
-    def is_voter?
-      is_member?
-    end
-
     def is_bd_staff?
       is_bd_staff
     end
@@ -417,12 +410,12 @@ class User < ApplicationRecord
   end
 
   module ThrottleMethods
-    def throttle_reason(reason)
+    def throttle_reason(reason, timeframe = "hourly")
       reasons = {
-          REJ_NEWBIE: 'can not yet perform this action. Account is too new',
-          REJ_LIMITED: 'have reached the hourly limit for this action'
+        REJ_NEWBIE: "can not yet perform this action. Account is too new",
+        REJ_LIMITED: "have reached the #{timeframe} limit for this action",
       }
-      reasons.fetch(reason, 'unknown throttle reason, please report this as a bug')
+      reasons.fetch(reason, "unknown throttle reason, please report this as a bug")
     end
 
     def upload_reason_string(reason)
@@ -489,9 +482,11 @@ class User < ApplicationRecord
                          nil, 3.days)
     create_user_throttle(:blip, ->{ Danbooru.config.blip_limit - Blip.for_creator(id).where('created_at > ?', 1.hour.ago).count },
                          :general_bypass_throttle?, 3.days)
+    create_user_throttle(:dmail_minute, ->{ Danbooru.config.dmail_minute_limit - Dmail.sent_by_id(id).where('created_at > ?', 1.minute.ago).count },
+                         nil, 7.days)
     create_user_throttle(:dmail, ->{ Danbooru.config.dmail_limit - Dmail.sent_by_id(id).where('created_at > ?', 1.hour.ago).count },
                          nil, 7.days)
-    create_user_throttle(:dmail_minute, ->{ Danbooru.config.dmail_minute_limit - Dmail.sent_by_id(id).where('created_at > ?', 1.minute.ago).count },
+    create_user_throttle(:dmail_day, ->{ Danbooru.config.dmail_day_limit - Dmail.sent_by_id(id).where('created_at > ?', 1.day.ago).count },
                          nil, 7.days)
     create_user_throttle(:comment_vote, ->{ Danbooru.config.comment_vote_limit - CommentVote.for_user(id).where("created_at > ?", 1.hour.ago).count },
                          :general_bypass_throttle?, 3.days)
@@ -534,8 +529,12 @@ class User < ApplicationRecord
       is_bd_staff?
     end
 
-    def can_upload?
-      can_upload_with_reason == true
+    def can_undo_post_versions?
+      is_member?
+    end
+
+    def can_revert_post_versions?
+      is_member?
     end
 
     def can_upload_with_reason
@@ -555,7 +554,9 @@ class User < ApplicationRecord
     end
 
     def hourly_upload_limit
-      Danbooru.config.hourly_upload_limit - Post.for_user(id).where("created_at >= ?", 1.hour.ago).count
+      post_count = posts.where("created_at >= ?", 1.hour.ago).count
+      replacement_count = can_approve_posts? ? 0 : post_replacements.where("created_at >= ?", 1.hour.ago).count
+      Danbooru.config.hourly_upload_limit - post_count - replacement_count
     end
     memoize :hourly_upload_limit
 
@@ -571,7 +572,7 @@ class User < ApplicationRecord
       rejected_replacement_count = post_replacement_rejected_count
       replaced_penalize_count = own_post_replaced_penalize_count
       unapproved_count = Post.pending_or_flagged.for_user(id).count
-      unapproved_replacements_count = PostReplacement.pending.for_user(id).count
+      unapproved_replacements_count = post_replacements.pending.count
       approved_count = Post.for_user(id).where('is_flagged = false AND is_deleted = false AND is_pending = false').count
 
       {
@@ -594,13 +595,7 @@ class User < ApplicationRecord
     end
 
     def favorite_limit
-      if is_contributor?
-        200_000
-      elsif is_privileged?
-        125_000
-      else
-        80_000
-      end
+      Danbooru.config.legacy_favorite_limit.fetch(id, 80_000)
     end
 
     def api_regen_multiplier
@@ -610,7 +605,7 @@ class User < ApplicationRecord
     def api_burst_limit
       # can make this many api calls at once before being bound by
       # api_regen_multiplier refilling your pool
-      if is_contributor?
+      if is_former_staff?
         120
       elsif is_privileged?
         90
@@ -624,7 +619,7 @@ class User < ApplicationRecord
     end
 
     def statement_timeout
-      if is_contributor?
+      if is_former_staff?
         9_000
       elsif is_privileged?
         6_000
@@ -761,7 +756,7 @@ class User < ApplicationRecord
           note_count: NoteVersion.for_user(id).count,
           own_post_replaced_count: PostReplacement.for_uploader_on_approve(id).count,
           own_post_replaced_penalize_count: PostReplacement.penalized.for_uploader_on_approve(id).count,
-          post_replacement_rejected_count: PostReplacement.rejected.for_user(id).count,
+          post_replacement_rejected_count: post_replacements.rejected.count,
         )
       end
     end
@@ -788,6 +783,10 @@ class User < ApplicationRecord
 
       if params[:about_me].present?
         q = q.attribute_matches(:profile_about, params[:about_me]).or(attribute_matches(:profile_artinfo, params[:about_me]))
+      end
+
+      if params[:avatar_id].present?
+        q = q.where(avatar_id: params[:avatar_id])
       end
 
       if params[:email_matches].present?
@@ -849,7 +848,7 @@ class User < ApplicationRecord
       when "post_update_count"
         q = q.order("user_statuses.post_update_count desc")
       else
-        q = q.apply_default_order(params)
+        q = q.apply_basic_order(params)
       end
 
       q

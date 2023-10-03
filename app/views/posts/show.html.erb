@@ -37,7 +37,7 @@
           <h1>Related</h1>
           <ul>
             <li><%= link_to "Sets with this post", post_sets_path(post_id: @post.id), rel: "nofollow" %></li>
-            <% if @post.has_preview? %>
+            <% if Danbooru.config.iqdb_server.present? && @post.has_preview? %>
               <li><%= link_to "Visually similar on E6", iqdb_queries_path(search: { post_id: @post.id }), rel: "nofollow" %></li>
             <% end %>
             <% if @post.is_image? %>
@@ -72,9 +72,9 @@
           <% end %>
         </div>
 
-        <%= render "ads/leaderboard" %>
+        <%= render "ads/leaderboard", tag_string: @post.ad_tag_string %>
 
-        <%= content_tag(:section, { id: "image-container" }.merge(PostPresenter.data_attributes(@post, include_post: true))) do -%>
+        <%= tag.section(id: "image-container", **PostPresenter.data_attributes(@post, include_post: true)) do -%>
           <div id="note-container"></div>
           <div id="note-preview"></div>
           <%= render "posts/partials/show/embedded", post: @post %>
@@ -100,7 +100,7 @@
           <div class="image-vote-buttons">
             <%= post_vote_block(@post, @post.own_vote, buttons: true) %>
           </div>
-          <%= content_tag(:div, class: "fav-buttons fav-buttons-#{@post.is_favorited?}") do %>
+          <%= tag.div(class: "fav-buttons fav-buttons-#{@post.is_favorited?}") do %>
             <%= button_tag "+Favorite", id: 'add-fav-button', class: "button btn-success", 'data-pid': @post.id %>
             <%= button_tag "-Favorite", id: 'remove-fav-button', class: "button btn-danger", 'data-pid': @post.id %>
           <% end %>

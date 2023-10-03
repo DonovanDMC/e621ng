@@ -24,9 +24,7 @@ class UserNameChangeRequest < ApplicationRecord
   def self.search(params)
     q = super
 
-    if params[:current_name].present?
-      q = q.where("user_id = ?", User.name_to_id(params[:current_name]))
-    end
+    q = q.where_user(:user_id, :current, params)
 
     if params[:original_name].present?
       q = q.where_ilike(:original_name, User.normalize_name(params[:original_name]))
@@ -36,7 +34,7 @@ class UserNameChangeRequest < ApplicationRecord
       q = q.where_ilike(:desired_name, User.normalize_name(params[:desired_name]))
     end
 
-    q.apply_default_order(params)
+    q.apply_basic_order(params)
   end
 
   def rejected?
@@ -56,7 +54,6 @@ class UserNameChangeRequest < ApplicationRecord
     user.update_attribute(:name, desired_name)
     body = "Your name change request has been approved. Be sure to log in with your new user name."
     Dmail.create_automated(:title => "Name change request approved", :body => body, :to_id => user_id)
-    ModAction.log(:user_name_change, {user_id: user.id, old_name: original_name, new_name: desired_name})
   end
 
   def not_limited

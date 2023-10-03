@@ -1,7 +1,7 @@
 module Admin
   class UsersController < ApplicationController
     before_action :admin_only
-    before_action :password_reset_permissions_check, only: %i[request_password_reset password_reset]
+    before_action :is_bd_staff_only, only: %i[request_password_reset password_reset]
     respond_to :html, :json
 
     def alt_list
@@ -42,18 +42,20 @@ module Admin
         @user.mark_verified! if params[:user][:verified].to_s.truthy?
         @user.mark_unverified! if params[:user][:verified].to_s.falsy?
       end
-      @user.promote_to!(params[:user][:level], params[:user])
+      @user.promote_to!(params[:user][:level], params[:user]) if params[:user][:level]
 
       old_username = @user.name
       desired_username = params[:user][:name]
       if old_username != desired_username && desired_username.present?
-        change_request = UserNameChangeRequest.create!({
-                                                           original_name: @user.name,
-                                                           user_id: @user.id,
-                                                           desired_name: desired_username,
-                                                           change_reason: "Administrative change",
-                                                           skip_limited_validation: true})
+        change_request = UserNameChangeRequest.create!(
+          original_name: @user.name,
+          user_id: @user.id,
+          desired_name: desired_username,
+          change_reason: "Administrative change",
+          skip_limited_validation: true,
+        )
         change_request.approve!
+        ModAction.log(:user_name_change, { user_id: @user.id })
       end
       redirect_to user_path(@user), notice: "User updated"
     end
@@ -91,10 +93,6 @@ module Admin
       permitted_params = %i[profile_about profile_artinfo base_upload_limit enable_privacy_mode]
       permitted_params << :email if user.is_bd_staff?
       params.require(:user).slice(*permitted_params).permit(permitted_params)
-    end
-
-    def password_reset_permissions_check
-      access_denied unless CurrentUser.is_bd_staff?
     end
   end
 end

@@ -2,9 +2,9 @@ import Utility from './utility'
 
 let Autocomplete = {};
 
-Autocomplete.METATAGS = <%= Tag::METATAGS.to_json.html_safe %>;
-Autocomplete.TAG_CATEGORIES = <%= TagCategory.mapping.to_json.html_safe %>;
-Autocomplete.ORDER_METATAGS = <%= Tag::ORDER_METATAGS.to_json.html_safe %>;
+Autocomplete.METATAGS = <%= TagQuery::METATAGS.to_json.html_safe %>;
+Autocomplete.TAG_CATEGORIES = <%= TagCategory::MAPPING.to_json.html_safe %>;
+Autocomplete.ORDER_METATAGS = <%= TagQuery::ORDER_METATAGS.to_json.html_safe %>;
 
 Autocomplete.TAG_PREFIXES = "-|~|" + Object.keys(Autocomplete.TAG_CATEGORIES).map(category => category + ":").join("|");
 Autocomplete.TAG_PREFIXES_REGEX = new RegExp("^(" + Autocomplete.TAG_PREFIXES + ")(.*)$", "i");
@@ -81,7 +81,7 @@ Autocomplete.initialize_tag_autocomplete = function() {
       case "age":
       case "limit":
       case "tagcount":
-      <% TagCategory.short_name_list.each do |category| %>
+      <% TagCategory::SHORT_NAME_LIST.each do |category| %>
         case "<%= category %>tags": // eslint-disable-line
       <% end %>
         resp([]);
@@ -257,7 +257,7 @@ Autocomplete.render_item = function(list, item) {
 
   if (item.antecedent) {
     var antecedent = item.antecedent.replace(/_/g, " ");
-    var arrow = $("<span/>").html(" &rarr; ").addClass("autocomplete-arrow");
+    var arrow = $("<span/>").text(" → ").addClass("autocomplete-arrow");
     var antecedent_element = $("<span/>").text(antecedent).addClass("autocomplete-antecedent");
     $link.prepend([
       antecedent_element,
@@ -394,7 +394,7 @@ Autocomplete.user_source = function(term, resp, prefix) {
         return {
           id: user.id,
           type: "user",
-          label: user.name.replace(/_/, " "),
+          label: user.name.replace(/_/g, " "),
           value: prefix + user.name,
           level: user.level_string
         };

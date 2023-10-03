@@ -8,9 +8,9 @@ class Artist < ApplicationRecord
   belongs_to_creator
   before_validation :normalize_name
   before_validation :normalize_other_names
-  validate :validate_user_can_edit?
+  validate :validate_user_can_edit
   validate :user_not_limited
-  validates :name, tag_name: true, uniqueness: true, on: :create
+  validates :name, tag_name: true, uniqueness: true, if: :name_changed?
   validates :name, :group_name, length: { maximum: 100 }
   after_save :log_changes
   after_save :create_version
@@ -180,7 +180,7 @@ class Artist < ApplicationRecord
         artists = []
         while artists.empty? && url.length > 10
           u = url.sub(/\/+$/, "") + "/"
-          u = u.to_escaped_for_sql_like.gsub(/\*/, '%') + '%'
+          u = u.to_escaped_for_sql_like.gsub("*", "%") + "%"
           artists += Artist.joins(:urls).where(["artists.is_active = TRUE AND artist_urls.normalized_url ILIKE ? ESCAPE E'\\\\'", u]).limit(10).order("artists.name").all
           url = File.dirname(url) + "/"
 
@@ -208,6 +208,11 @@ class Artist < ApplicationRecord
     end
 
     def url_string=(string)
+      # FIXME: This is a hack. Setting an association directly immediatly updates without regard for the parents validity.
+      # As a consequence, removing urls always works. This does not create a new ArtistVersion.
+      # This fix isn't great but it's the best I came up with without rather large changes.
+      return unless valid?
+
       url_string_was = url_string
 
       self.urls = string.to_s.scan(/[^[:space:]]+/).map do |url|
@@ -235,7 +240,7 @@ class Artist < ApplicationRecord
       Cache.fetch("artist-domains-#{id}", expires_in: 1.day) do
         re = /\.(png|jpeg|jpg|webm|mp4)$/m
         counted = Hash.new(0)
-        sources = Post.raw_tag_match(name).limit(100).records.pluck(:source).each do |source_string|
+        sources = Post.tag_match(name, resolve_aliases: false).limit(100).pluck(:source).each do |source_string|
           sources = source_string.split("\n")
           # try to filter out direct file urls
           domains = sources.filter {|s| !re.match?(s) }.map do |x|
@@ -394,7 +399,7 @@ class Artist < ApplicationRecord
       saved_change_to_is_locked?
     end
 
-    def validate_user_can_edit?
+    def validate_user_can_edit
       return if CurrentUser.is_janitor?
 
       if !is_active?
@@ -464,13 +469,7 @@ class Artist < ApplicationRecord
 
       q = q.attribute_matches(:is_active, params[:is_active])
 
-      if params[:creator_name].present?
-        q = q.where("artists.creator_id = (select _.id from users _ where lower(_.name) = ?)", params[:creator_name].tr(" ", "_").downcase)
-      end
-
-      if params[:creator_id].present?
-        q = q.where("artists.creator_id = ?", params[:creator_id].to_i)
-      end
+      q = q.where_user(:creator_id, :creator, params)
 
       if params[:has_tag].to_s.truthy?
         q = q.joins(:tag).where("tags.post_count > 0")
@@ -490,7 +489,7 @@ class Artist < ApplicationRecord
       when "post_count"
         q = q.includes(:tag).order("tags.post_count desc nulls last").order("artists.name").references(:tags)
       else
-        q = q.apply_default_order(params)
+        q = q.apply_basic_order(params)
       end
 
       q

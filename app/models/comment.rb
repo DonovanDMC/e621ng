@@ -5,7 +5,7 @@ class Comment < ApplicationRecord
   belongs_to_updater
   validate :validate_post_exists, on: :create
   validate :validate_creator_is_not_limited, on: :create
-  validate :post_not_comment_disabled, on: :create
+  validate :post_not_comment_locked, on: :create
   validates :body, presence: { message: "has no content" }
   validates :body, length: { minimum: 1, maximum: Danbooru.config.comment_max_size }
 
@@ -68,10 +68,6 @@ class Comment < ApplicationRecord
       user_id.present? ? where("creator_id = ?", user_id) : none
     end
 
-    def for_creator_name(user_name)
-      for_creator(User.name_to_id(user_name))
-    end
-
     def search(params)
       q = super.includes(:creator).includes(:updater).includes(:post)
 
@@ -85,13 +81,11 @@ class Comment < ApplicationRecord
         q = q.post_tags_match(params[:post_tags_match])
       end
 
-      if params[:creator_name].present?
-        q = q.for_creator_name(params[:creator_name])
+      with_resolved_user_ids(:post_note_updater, params) do |user_ids|
+        q = q.where(post_id: NoteVersion.select(:post_id).where(updater_id: user_ids))
       end
 
-      if params[:creator_id].present?
-        q = q.for_creator(params[:creator_id].to_i)
-      end
+      q = q.where_user(:creator_id, :creator, params)
 
       if params[:ip_addr].present?
         q = q.where("creator_ip_addr <<= ?", params[:ip_addr])
@@ -113,7 +107,7 @@ class Comment < ApplicationRecord
         if %i[body_matches creator_name creator_id].any? { |key| params[key].present? }
           q = q.order(created_at: :desc)
         else
-          q = q.apply_default_order(params)
+          q = q.apply_basic_order(params)
         end
       end
 
@@ -142,8 +136,8 @@ class Comment < ApplicationRecord
     true
   end
 
-  def post_not_comment_disabled
-    errors.add(:base, "Post has comments disabled") if Post.find_by(id: post_id)&.is_comment_disabled
+  def post_not_comment_locked
+    errors.add(:base, "Post has comments locked") if !CurrentUser.is_moderator? && Post.find_by(id: post_id)&.is_comment_locked?
   end
 
   def update_last_commented_at_on_create
@@ -181,8 +175,15 @@ class Comment < ApplicationRecord
     score < user.comment_threshold
   end
 
+  def can_reply?(user)
+    return false if is_sticky?
+    return false if post.is_comment_locked? && !user.is_moderator?
+    true
+  end
+
   def editable_by?(user)
     return true if user.is_admin?
+    return false if post.is_comment_locked? && !user.is_moderator?
     return false if was_warned?
     creator_id == user.id
   end

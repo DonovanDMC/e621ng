@@ -67,12 +67,18 @@ module Danbooru
           "Blocked" => 10,
           "Member" => 20,
           "Privileged" => 30,
-          "Contributor" => 33,
           "Former Staff" => 34,
           "Janitor" => 35,
           "Moderator" => 40,
           "Admin" => 50
       }
+    end
+
+    # Prevent new users from going above 80k while allowing those currently above
+    # it to continue adding new favorites with the old limit.
+    # { 123 => 200_000 }
+    def legacy_favorite_limit
+      {}
     end
 
     # Set the default level, permissions, and other settings for new users here.
@@ -87,6 +93,10 @@ module Danbooru
     end
 
     def default_blacklist
+      []
+    end
+
+    def safeblocked_tags
       []
     end
 
@@ -174,12 +184,16 @@ module Danbooru
       3_000
     end
 
-    def dmail_limit
-      20
-    end
-
     def dmail_minute_limit
       1
+    end
+
+    def dmail_limit
+      10
+    end
+
+    def dmail_day_limit
+      50
     end
 
     def tag_suggestion_limit
@@ -319,12 +333,14 @@ module Danbooru
       250_000
     end
 
+    def user_feedback_max_size
+      20_000
+    end
+
     def discord_site
-      "http://localhost:8000"
     end
 
     def discord_secret
-      "abc123"
     end
 
     # Maximum size of an upload. If you change this, you must also change
@@ -412,107 +428,6 @@ module Danbooru
       # Backup files to /mnt/backup on the local filesystem.
       # StorageManager::Local.new(base_dir: "/mnt/backup", hierarchical: false)
     end
-
-#TAG CONFIGURATION
-
-    #Full tag configuration info for all tags
-    def full_tag_config_info
-      @full_tag_category_mapping ||= {
-        "general" => {
-          "category" => 0,
-          "short" => "gen",
-          "extra" => [],
-          "header" => 'General',
-          "humanized" => nil,
-        },
-        "species" => {
-          "category" => 5,
-          "short" => "spec",
-          "extra" => [],
-          "header" => 'Species',
-          "humanized" => nil,
-        },
-        "character" => {
-          "category" => 4,
-          "short" => "char",
-          "extra" => ["ch", "oc"],
-          "header" => 'Characters',
-          "humanized" => {
-            "slice" => 5,
-            "exclusion" => [],
-            "regexmap" => /^(.+?)(?:_\(.+\))?$/,
-            "formatstr" => "%s"
-          },
-        },
-        "copyright" => {
-          "category" => 3,
-          "short" => "copy",
-          "extra" => ["co"],
-          "header" => 'Copyrights',
-          "humanized" => {
-            "slice" => 1,
-            "exclusion" => [],
-            "regexmap" => //,
-            "formatstr" => "(%s)"
-          },
-        },
-        "artist" => {
-          "category" => 1,
-          "short" => "art",
-          "extra" => [],
-          "header" => 'Artists',
-          "humanized" => {
-            "slice" => 0,
-            "exclusion" => %w(avoid_posting conditional_dnp epilepsy_warning sound_warning),
-            "regexmap" => //,
-            "formatstr" => "created by %s"
-          },
-        },
-        "invalid" => {
-          "category" => 6,
-          "short" => "inv",
-          "extra" => [],
-          "header" => 'Invalid',
-          "humanized" => nil,
-          "admin_only" => true,
-        },
-        "lore" => {
-          "category" => 8,
-          "short" => 'lor',
-          'extra' => [],
-          'header' => 'Lore',
-          'humanized' => nil,
-          "admin_only" => true,
-        },
-        "meta" => {
-          "category" => 7,
-          "short" => "meta",
-          "extra" => [],
-          "header" => 'Meta',
-          "humanized" => nil,
-          "admin_only" => true,
-        }
-      }
-    end
-
-#TAG ORDERS
-
-    #Sets the order of the humanized essential tag string (models/post.rb)
-    def humanized_tag_category_list
-      @humanized_tag_category_list ||= ["character","copyright","artist"]
-    end
-
-    #Sets the order of the split tag header list (presenters/tag_set_presenter.rb)
-    def split_tag_header_list
-      @split_tag_header_list ||= ["invalid","artist","copyright","character","species","general","meta","lore"]
-    end
-
-    #Sets the order of the categorized tag string (presenters/post_presenter.rb)
-    def categorized_tag_list
-      @categorized_tag_list ||= ["invalid","artist","copyright","character","species","meta","general","lore"]
-    end
-
-#END TAG
 
     # If enabled, users must verify their email addresses.
     def enable_email_verification?
@@ -712,8 +627,7 @@ module Danbooru
     def iqdb_server
     end
 
-    def elasticsearch_host
-      '127.0.0.1'
+    def opensearch_host
     end
 
     # Use a recaptcha on the signup page to protect against spambots creating new accounts.
@@ -743,6 +657,11 @@ module Danbooru
       false
     end
 
+    # These tags will be sent to the revive server to do filtering on
+    def ads_keyword_tags
+      []
+    end
+
     def ads_zone_desktop
       {zone: nil, revive_id: nil, checksum: nil}
     end
@@ -768,6 +687,10 @@ module Danbooru
     def enable_visitor_metrics?
       false
     end
+
+    def janitor_reports_discord_webhook_url
+      nil
+    end
   end
 
   class EnvironmentConfiguration
@@ -782,13 +705,13 @@ module Danbooru
       var
     end
 
-    def method_missing(method, *args)
+    def method_missing(method, *)
       var = ENV["DANBOORU_#{method.to_s.upcase.chomp("?")}"]
 
       if var.present?
         env_to_boolean(method, var)
       else
-        custom_configuration.send(method, *args)
+        custom_configuration.send(method, *)
       end
     end
   end

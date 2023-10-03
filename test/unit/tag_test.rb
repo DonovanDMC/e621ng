@@ -17,6 +17,10 @@ class TagTest < ActiveSupport::TestCase
       assert_equal(Tag.categories.artist, Tag.category_for("!@ab"))
     end
 
+    should "return general for a tag that doesn't exist" do
+      assert_equal(Tag.categories.general, Tag.category_for("missing"))
+    end
+
     should "fetch for multiple tags" do
       create(:artist_tag, name: "aaa")
       create(:copyright_tag, name: "bbb")
@@ -81,66 +85,7 @@ class TagTest < ActiveSupport::TestCase
     end
 
     context "not be settable to an invalid category" do
-      should validate_inclusion_of(:category).in_array(TagCategory.category_ids)
-    end
-  end
-
-  context "A tag parser" do
-    should "scan a query" do
-      assert_equal(%w(aaa bbb), Tag.scan_query("aaa bbb"))
-      assert_equal(%w(~AAa -BBB* -bbb*), Tag.scan_query("~AAa -BBB* -bbb*"))
-    end
-
-    should "not strip out valid characters when scanning" do
-      assert_equal(%w(aaa bbb), Tag.scan_tags("aaa bbb"))
-      assert_equal(%w(favgroup:yondemasu_yo,_azazel-san. pool:ichigo_100%), Tag.scan_tags("favgroup:yondemasu_yo,_azazel-san. pool:ichigo_100%"))
-    end
-
-    should "cast values" do
-      assert_equal(2048, Tag.parse_cast("2kb", :filesize))
-      assert_equal(2097152, Tag.parse_cast("2m", :filesize))
-      assert_nothing_raised {Tag.parse_cast("2009-01-01", :date)}
-      assert_nothing_raised {Tag.parse_cast("1234", :integer)}
-      assert_nothing_raised {Tag.parse_cast("1234.56", :float)}
-    end
-
-    should "parse a query" do
-      tag1 = create(:tag, name: "abc")
-      tag2 = create(:tag, name: "acb")
-
-      assert_equal(["abc"], Tag.parse_query("md5:abc")[:md5])
-      assert_equal([:between, 1, 2], Tag.parse_query("id:1..2")[:post_id])
-      assert_equal([:gte, 1], Tag.parse_query("id:1..")[:post_id])
-      assert_equal([:lte, 2], Tag.parse_query("id:..2")[:post_id])
-      assert_equal([:gt, 2], Tag.parse_query("id:>2")[:post_id])
-      assert_equal([:lt, 3], Tag.parse_query("id:<3")[:post_id])
-      assert_equal([:lt, 3], Tag.parse_query("ID:<3")[:post_id])
-
-      Tag.expects(:normalize_tags_in_query).returns(nil)
-      assert_equal(["acb"], Tag.parse_query("a*b")[:tags][:include])
-    end
-
-    should "parse single tags correctly" do
-      assert_equal(true, Tag.is_single_tag?("foo"))
-      assert_equal(true, Tag.is_single_tag?("-foo"))
-      assert_equal(true, Tag.is_single_tag?("~foo"))
-      assert_equal(true, Tag.is_single_tag?("foo*"))
-      assert_equal(true, Tag.is_single_tag?("fav:1234"))
-      assert_equal(true, Tag.is_single_tag?("pool:1234"))
-      assert_equal(true, Tag.is_single_tag?('source:"foo bar baz"'))
-      assert_equal(false, Tag.is_single_tag?("foo bar"))
-    end
-
-    should "parse simple tags correctly" do
-      assert_equal(true, Tag.is_simple_tag?("foo"))
-      assert_equal(false, Tag.is_simple_tag?("-foo"))
-      assert_equal(false, Tag.is_simple_tag?("~foo"))
-      assert_equal(false, Tag.is_simple_tag?("foo*"))
-      assert_equal(false, Tag.is_simple_tag?("fav:1234"))
-      assert_equal(false, Tag.is_simple_tag?("FAV:1234"))
-      assert_equal(false, Tag.is_simple_tag?("pool:1234"))
-      assert_equal(false, Tag.is_simple_tag?('source:"foo bar baz"'))
-      assert_equal(false, Tag.is_simple_tag?("foo bar"))
+      should validate_inclusion_of(:category).in_array(TagCategory::CATEGORY_IDS)
     end
   end
 
@@ -219,7 +164,6 @@ class TagTest < ActiveSupport::TestCase
       should allow_value(" foo ").for(:name).on(:create)
       should allow_value("foo bar").for(:name).on(:create)
       should allow_value("FOO").for(:name).on(:create)
-      should allow_value("café").for(:name).on(:create)
 
       should_not allow_value("").for(:name).on(:create)
       should_not allow_value("___").for(:name).on(:create)
@@ -231,10 +175,11 @@ class TagTest < ActiveSupport::TestCase
       should_not allow_value("foo*bar").for(:name).on(:create)
       should_not allow_value("foo,bar").for(:name).on(:create)
       should_not allow_value("foo\abar").for(:name).on(:create)
+      should_not allow_value("café").for(:name).on(:create)
       should_not allow_value("東方").for(:name).on(:create)
       should_not allow_value("FAV:blah").for(:name).on(:create)
 
-      metatags = Tag::METATAGS + TagCategory.mapping.keys
+      metatags = TagQuery::METATAGS + TagCategory::MAPPING.keys
       metatags.each do |metatag|
         should_not allow_value("#{metatag}:foo").for(:name).on(:create)
       end
@@ -243,7 +188,7 @@ class TagTest < ActiveSupport::TestCase
 
   context "A tag with a negative post count" do
     should "be fixed" do
-      Post.__elasticsearch__.create_index! force: true
+      reset_post_index
       tag = create(:tag, name: "touhou", post_count: -10)
       post = create(:post, tag_string: "touhou")
 

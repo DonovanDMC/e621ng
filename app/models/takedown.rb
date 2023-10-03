@@ -17,14 +17,6 @@ class Takedown < ApplicationRecord
   after_validation :normalize_deleted_post_ids
   before_save :update_post_count
 
-  PRETTY_STATUS = {
-      'partial': 'Partially Approved'
-  }
-
-  def pretty_status
-    PRETTY_STATUS.fetch(status, status.capitalize)
-  end
-
   def initialize_fields
     self.status = "pending"
     self.vericode = Takedown.create_vericode
@@ -104,12 +96,8 @@ class Takedown < ApplicationRecord
     end
 
     def add_posts_by_tags!(tag_string)
-      added_ids = []
-      CurrentUser.without_safe_mode do
-        new_ids = Post.tag_match("#{tag_string} -status:deleted").limit(1000).results.map(&:id)
-        added_ids = add_posts_by_ids!(new_ids.join(' '))
-      end
-      added_ids
+      new_ids = Post.tag_match_system("#{tag_string} -status:deleted").limit(1000).pluck(:id)
+      add_posts_by_ids!(new_ids.join(" "))
     end
 
     def remove_posts_by_ids!(ids)
@@ -230,12 +218,7 @@ class Takedown < ApplicationRecord
       if params[:ip_addr].present?
         q = q.where('creator_ip_addr <<= ?', params[:ip_addr])
       end
-      if params[:creator_id].present?
-        q = q.where('creator_id = ?', params[:creator_id])
-      end
-      if params[:creator_name].present?
-        q = q.where('takedowns.creator_id = (select _.id from users _ WHERE lower(_.name) ? ?)', params[:creator_name].tr(' ', '_').downcase)
-      end
+      q = q.where_user(:creator_id, :creator, params)
       if params[:email].present?
         q = q.where_ilike(:email, params[:email])
       end
@@ -252,7 +235,7 @@ class Takedown < ApplicationRecord
       when 'post_count'
         q = q.order('post_count DESC')
       else
-        q = q.order('id DESC')
+        q = q.apply_basic_order(params)
       end
 
       q

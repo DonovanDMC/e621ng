@@ -3,8 +3,8 @@
         <div class="related-section" v-for="group in tagGroups" :key="group.title">
             <div class="related-items" v-for="tags, i in splitTags(group.tags)" :key="i">
                 <div class="related-title" v-if="i === 0">{{group.title}}</div>
-                <div class="related-item" v-for="tag in tags" :key="tag[0]">
-                    <a :class="tagClasses(tag)" :href="tagLink(tag)" @click.prevent="toggle(tag)">{{tag[0]}}</a>
+                <div class="related-item" v-for="tag in tags" :key="tag.name">
+                    <a :class="tagClasses(tag)" :href="tagLink(tag)" @click.prevent="toggle(tag)">{{tag.name}}</a>
                 </div>
             </div>
         </div>
@@ -14,7 +14,7 @@
 <script>
 
   function tagSorter(a, b) {
-    return a[0] > b[0] ? 1 : -1;
+    return a.name > b.name ? 1 : -1;
   }
   export default {
     props: ['tags', 'related', 'loading'],
@@ -22,22 +22,21 @@
       return {
         uploaded: (window.uploaderSettings.uploadTags || []),
         recent: (window.uploaderSettings.recentTags || []).sort(tagSorter),
-        artists: (window.uploaderSettings.artistTags || []).sort(tagSorter)
       };
     },
     methods: {
       toggle: function (tag) {
-        this.$emit('tag-active', tag[0], !this.tagActive(tag));
+        this.$emit('tag-active', tag.name, !this.tagActive(tag));
       },
       tagLink: function (tag) {
-        return '/wiki_pages/show_or_new?title=' + encodeURIComponent(tag[0]);
+        return '/wiki_pages/show_or_new?title=' + encodeURIComponent(tag.name);
       },
       tagActive: function (tag) {
-        return this.tags.indexOf(tag[0]) !== -1;
+        return this.tags.indexOf(tag.name) !== -1;
       },
       tagClasses: function (tag) {
         var classes = {'tag-active': this.tagActive(tag)};
-        classes['tag-type-' + tag[2]] = true;
+        classes['tag-type-' + tag.category_id] = true;
         return classes;
       },
       splitTags: function (tags) {
@@ -65,12 +64,6 @@
             groups.push({
               title: "Recent",
               tags: this.recent
-            });
-          }
-          if (this.artists && this.artists.length) {
-            groups.push({
-              title: "Artists",
-              tags: this.artists
             });
           }
           if (this.related && this.related.length) {
