@@ -61,6 +61,16 @@ class ModActionDecorator < ApplicationDecorator
     when "artist_user_unlinked"
       "Unlinked #{user} from artist ##{vals['artist_page']}"
 
+      ### Avoid Posting ###
+    when "avoid_posting_create", "avoid_posting_undelete"
+      "Added avoid posting for artist ##{vals['artist_id']}"
+    when "avoid_posting_update"
+      "Updated avoid posting for artist ##{vals['artist_id']}"
+    when "avoid_posting_destroy"
+      "Deleted avoid posting for artist ##{vals['artist_id']}"
+    when "avoid_posting_delete"
+      "Removed avoid posting for artist ##{vals['artist_id']}"
+
       ### User ###
 
     when "user_delete"

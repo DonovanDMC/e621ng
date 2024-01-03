@@ -7,10 +7,12 @@ class Artist < ApplicationRecord
   belongs_to_creator
   before_validation :normalize_name
   before_validation :normalize_other_names
+  validate :dnp_restricted_properties_not_changed, on: :update
   validate :validate_user_can_edit
   validate :user_not_limited
   validates :name, tag_name: true, uniqueness: true, if: :name_changed?
   validates :name, :group_name, length: { maximum: 100 }
+  before_destroy :validate_not_dnp
   after_save :log_changes
   after_save :create_version
   after_save :categorize_tag
@@ -24,11 +26,34 @@ class Artist < ApplicationRecord
   has_one :wiki_page, :foreign_key => "title", :primary_key => "name"
   has_one :tag_alias, :foreign_key => "antecedent_name", :primary_key => "name"
   has_one :tag, :foreign_key => "name", :primary_key => "name"
+  has_one :avoid_posting
   belongs_to :linked_user, class_name: "User", optional: true
   attribute :notes, :string
 
   scope :active, -> { where(is_active: true) }
   scope :deleted, -> { where(is_active: false) }
+  def validate_not_dnp
+    if avoid_posting&.is_active?
+      errors.add(:artist, "is on the avoid posting list")
+      throw :abort
+    end
+  end
+
+  def dnp_restricted_properties_not_changed
+    return unless dnp_restricted?
+    error_changes = []
+    error_changes << :name if will_save_change_to_name?
+    error_changes << :group_name if will_save_change_to_group_name?
+    error_changes << :other_names if will_save_change_to_other_names?
+
+    if error_changes.present?
+      error_changes.each do |property|
+        errors.add(property, "cannot be changed while the artist is on the DNP list")
+      end
+
+      throw :abort
+    end
+  end
 
   def log_changes
     if saved_change_to_name? && !previously_new_record?
@@ -407,6 +432,16 @@ class Artist < ApplicationRecord
     end
   end
 
+  module AvoidPostingMethods
+    def is_dnp?
+      avoid_posting&.is_active?
+    end
+
+    def dnp_restricted?
+      is_dnp? && !CurrentUser.can_edit_avoid_posting_entries?
+    end
+  end
+
   module SearchMethods
     def any_other_name_matches(regex)
       where(id: Artist.from("unnest(other_names) AS other_name").where("other_name ~ ?", regex))
@@ -496,6 +531,7 @@ class Artist < ApplicationRecord
   include NoteMethods
   include TagMethods
   include LockMethods
+  include AvoidPostingMethods
   extend SearchMethods
 
   def status

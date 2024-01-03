@@ -73,6 +73,16 @@ Rails.application.routes.draw do
     end
   end
 
+  resources :avoid_postings do
+    member do
+      put :delete
+      put :undelete
+    end
+
+  end
+
+  resources :avoid_posting_versions, only: %i[index]
+
   resources :tickets do
     member do
       post :claim
