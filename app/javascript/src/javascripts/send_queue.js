@@ -1,48 +1,70 @@
-class CBQueue {
-  constructor(timer) {
-    this.timeout = timer || 1000;
-    this.queue = [];
-    this.id = null;
-    this.running = true;
-  }
-
-  tick() {
-    if (!this.running || !this.queue.length) {
-      clearInterval(this.id);
-      this.id = null;
-      return;
+/**
+ * A sequential request queue with a minimum time between requests.
+ * @prop {Number} time The minimum amount of time between requests, in milliseconds.
+ * @prop {Function[]} queue The queued functions.
+ * @prop {Boolean} running If the queue is currently running.
+ * @prop {Boolean} active If the queue is currently active.
+ */
+class RequestQueue {
+    /**
+     * @param {Number} [time] The minimum amount of time between requests, in milliseconds.
+     */
+    constructor(time) {
+        this.time = time || 1000;
+        this.queue = [];
+        this.running = false;
+        this.active = true;
     }
-    this.queue.shift()();
-  }
 
-  add(cb) {
-    this.queue.push(cb);
-    if (this.running) {
-      this.start();
+    /**
+     * Add a request to the queue.
+     * @param {Function} cb 
+     */
+    add(cb) {
+        this.queue.push(cb);
+        this.run();
     }
-  }
 
-  start() {
-    let self = this;
-    this.running = true;
-    if (!this.id) {
-      this.id = setInterval(function () {
-        self.tick();
-      }, this.timeout);
-      this.tick();
-    }
-  }
+    /** Run the queue. This should only be called internally. */
+    async run() {
+        if(this.running || !this.active) {
+            return;
+        }
 
-  stop() {
-    if (this.id) {
-      clearInterval(this.id);
+        const func = this.queue.shift();
+        if(func === undefined) {
+            this.running = false;
+            return;
+        }
+
+        this.running = true;
+        const start = Date.now();
+        await Promise.resolve(func())
+            .catch(err => console.error("Error in request handler:", err));
+        const end = Date.now();
+
+        const diff = this.time - (end - start);
+        if(diff > 0) {
+            // ensure each request takes at least TIMEms
+            await new Promise(resolve => setTimeout(resolve, diff));
+        }
+        this.running = false;
+
+        this.run();
     }
-    this.id = null;
-    this.running = false;
-  }
+
+    /** Start the queue. */
+    start() {
+        this.active = true;
+        this.run();
+    }
+
+    /** Stop the queue. */
+    stop() {
+        this.active = false;
+        this.running = false;
+    }
 }
 
-let SendQueue = new CBQueue(700);
-
-export default CBQueue;
-export { SendQueue };
+export const SendQueue = new RequestQueue(700);
+export default RequestQueue;
