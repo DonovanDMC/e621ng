@@ -2011,44 +2011,86 @@ class PostTest < ActiveSupport::TestCase
   end
 
   context "Voting:" do
+    setup do
+      @user = create(:privileged_user, created_at: 14.days.ago)
+      @post = create(:post)
+      CurrentUser.user = @user
+    end
+
     should "not allow duplicate votes" do
-      user = create(:privileged_user)
-      post = create(:post)
-      as(user) do
-        assert_nothing_raised { VoteManager.vote!(user: user, post: post, score: 1) }
-        # Need unvote is returned upon duplicates that are accounted for.
-        assert_equal(:need_unvote, VoteManager.vote!(user: user, post: post, score: 1) )
-        post.reload
-        assert_equal(1, PostVote.count)
-        assert_equal(1, post.score)
-      end
+      assert_nothing_raised { VoteManager.vote!(user: @user, post: @post, score: 1) }
+      # Need unvote is returned upon duplicates that are accounted for.
+      assert_equal(:need_unvote, VoteManager.vote!(user: @user, post: @post, score: 1) )
+      @post.reload
+      assert_equal(1, PostVote.count)
+      assert_equal(1, @post.score)
     end
 
     should "allow undoing of votes" do
-      user = create(:privileged_user, created_at: 7.days.ago)
-      post = create(:post)
-
       # We deliberately don't call post.reload until the end to verify that
       # post.unvote! returns the correct score even when not forcibly reloaded.
-      as(user) do
-        VoteManager.vote!(post: post, user: user, score: 1)
-        assert_equal(1, post.score)
+      VoteManager.vote!(post: @post, user: @user, score: 1)
+      assert_equal(1, @post.score)
 
-        VoteManager.unvote!(post: post, user: user)
-        assert_equal(0, post.score)
+      VoteManager.unvote!(post: @post, user: @user)
+      assert_equal(0, @post.score)
 
-        assert_nothing_raised { VoteManager.vote!(post: post, user: user, score: -1) }
-        assert_equal(-1, post.score)
+      assert_nothing_raised { VoteManager.vote!(post: @post, user: @user, score: -1) }
+      assert_equal(-1, @post.score)
 
-        VoteManager.unvote!(post: post, user: user)
-        assert_equal(0, post.score)
+      VoteManager.unvote!(post: @post, user: @user)
+      assert_equal(0, @post.score)
 
-        assert_nothing_raised { VoteManager.vote!(post: post, user: user, score: 1) }
-        assert_equal(1, post.score)
+      assert_nothing_raised { VoteManager.vote!(post: @post, user: @user, score: 1) }
+      assert_equal(1, @post.score)
 
-        post.reload
-        assert_equal(1, post.score)
-      end
+      @post.reload
+      assert_equal(1, @post.score)
+    end
+
+    should "periodically clean the vote_string" do
+      @post.update_column(:vote_string, "down:1 locked:1 up:1")
+      @post.update_column(:score, 0)
+      @post.append_user_to_vote_string(2, "down")
+      assert_same_elements(%w[down:1 down:2], @post.vote_string.split)
+      assert_equal(-2, @post.score)
+    end
+
+    should "update the vote string on the post" do
+      VoteManager.vote!(user: @user, post: @post, score: 1)
+      @post.reload
+      assert_equal("up:#{@user.id}", @post.vote_string)
+      assert(PostVote.exists?(user_id: @user.id, post_id: @post.id))
+
+      VoteManager.vote!(user: @user, post: @post, score: 1)
+      @post.reload
+      assert_equal("up:#{@user.id}", @post.vote_string)
+      assert(PostVote.exists?(user_id: @user.id, post_id: @post.id))
+
+      VoteManager.lock!(PostVote.find_by!(user_id: @user.id, post_id: @post.id))
+      @post.reload
+      assert_equal("locked:#{@user.id}", @post.vote_string)
+      assert(PostVote.exists?(user_id: @user.id, post_id: @post.id))
+
+      VoteManager.admin_unvote!(PostVote.find_by!(user_id: @user.id, post_id: @post.id))
+      @post.reload
+      assert_equal("", @post.vote_string)
+      assert(!PostVote.exists?(user_id: @user.id, post_id: @post.id))
+
+      VoteManager.vote!(user: @user, post: @post, score: 1)
+      @post.reload
+      assert_equal("up:#{@user.id}", @post.vote_string)
+      assert(PostVote.exists?(user_id: @user.id, post_id: @post.id))
+
+      VoteManager.unvote!(user: @user, post: @post)
+      @post.reload
+      assert_equal("", @post.vote_string)
+      assert(!PostVote.exists?(user_id: @user.id, post_id: @post.id))
+
+      VoteManager.unvote!(user: @user, post: @post)
+      @post.reload
+      assert_equal("", @post.vote_string)
+      assert(!PostVote.exists?(user_id: @user.id, post_id: @post.id))
     end
   end
 

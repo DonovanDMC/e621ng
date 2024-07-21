@@ -1017,7 +1017,32 @@ class Post < ApplicationRecord
   module VoteMethods
     def own_vote(user = CurrentUser.user)
       return nil unless user
-      votes.where('user_id = ?', user.id).first
+      v = vote_string.scan(/\b([a-z]+):#{user.id}\b/).map { $1 }.first
+      return nil if v.nil?
+      %w[down locked up].index(v) - 1
+    end
+
+    def append_user_to_vote_string(user_id, type)
+      if vote_string =~ /\b([a-z]+):#{user_id}\b/
+        return if $1 == type
+        self.vote_string = vote_string.gsub(/\b([a-z]+):#{user_id}\b/, "#{type}:#{user_id}")
+      else
+        self.vote_string = (vote_string + " #{type}:#{user_id}").strip
+      end
+      clean_vote_string!
+    end
+
+    def delete_user_from_vote_string(user_id)
+      self.vote_string = vote_string.gsub(/\b([a-z]+):#{user_id}\b/, " ").strip
+      clean_vote_string!
+    end
+
+    def clean_vote_string!
+      array = vote_string.split.uniq { |x| x[/\d+/] }
+      self.vote_string = array.join(" ")
+      self.up_score = array.count { |x| x =~ /up/ }
+      self.down_score = array.count { |x| x =~ /down/ }
+      self.score = up_score - down_score
     end
   end
 

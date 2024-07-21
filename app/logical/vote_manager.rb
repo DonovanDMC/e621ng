@@ -12,28 +12,16 @@ class VoteManager
       raise UserVote::Error.new("You do not have permission to vote") unless user.is_member?
       PostVote.transaction(**ISOLATION) do
         PostVote.uncached do
-          score_modifier = score
           old_vote = PostVote.where(user_id: user.id, post_id: post.id).first
           if old_vote
             raise UserVote::Error.new("Vote is locked") if old_vote.score == 0
-            if old_vote.score == score
-              return :need_unvote
-            else
-              score_modifier *= 2
-            end
+            return :need_unvote if old_vote.score == score
             old_vote.destroy
           end
-          @vote = vote = PostVote.create!(user: user, score: score, post: post)
-          vote_cols = "score = score + #{score_modifier}"
-          if vote.score > 0
-            vote_cols += ", up_score = up_score + #{vote.score}"
-            vote_cols += ", down_score = down_score - #{old_vote.score}" if old_vote
-          else
-            vote_cols += ", down_score = down_score + #{vote.score}"
-            vote_cols += ", up_score = up_score - #{old_vote.score}" if old_vote
-          end
-          Post.where(id: post.id).update_all(vote_cols)
-          post.reload
+          @vote = PostVote.create!(user: user, score: score, post: post)
+          post.append_user_to_vote_string(user.id, %w[down locked up].fetch(score + 1))
+          post.do_not_version_changes = true
+          post.save
         end
       end
     rescue ActiveRecord::SerializationFailure => e
@@ -56,8 +44,9 @@ class VoteManager
           return unless vote
           raise UserVote::Error.new "You can't remove locked votes" if vote.score == 0 && !force
           post.votes.where(user: user).delete_all
-          subtract_vote(post, vote)
-          post.reload
+          post.delete_user_from_vote_string(user.id)
+          post.do_not_version_changes = true
+          post.save
         end
       end
     rescue ActiveRecord::SerializationFailure
@@ -74,7 +63,9 @@ class VoteManager
       vote = PostVote.find_by(id: id)
       return unless vote
       post = vote.post
-      subtract_vote(post, vote)
+      post.append_user_to_vote_string(vote.user_id, "locked")
+      post.do_not_version_changes = true
+      post.save
       vote.update_column(:score, 0)
     end
     post&.update_index

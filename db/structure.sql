@@ -1612,7 +1612,8 @@ CREATE TABLE public.posts (
     bg_color character varying,
     generated_samples character varying[],
     duration numeric,
-    is_comment_disabled boolean DEFAULT false NOT NULL
+    is_comment_disabled boolean DEFAULT false NOT NULL,
+    vote_string character varying DEFAULT ''::character varying NOT NULL
 );
 
 
@@ -4495,6 +4496,7 @@ ALTER TABLE ONLY public.favorites
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20240721003837'),
 ('20240709134926'),
 ('20240101042716'),
 ('20230531080817'),

@@ -35,7 +35,8 @@ class PostsDecorator < ApplicationDecorator
         "data-file-ext" => post.file_ext,
         "data-score" => post.score,
         "data-fav-count" => post.fav_count,
-        "data-is-favorited" => post.favorited_by?(CurrentUser.user.id)
+        "data-is-favorited" => post.favorited_by?(CurrentUser.user.id),
+        "data-own-vote" => post.own_vote
     }
 
     if post.visible?
