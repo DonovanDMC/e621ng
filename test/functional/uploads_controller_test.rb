@@ -112,6 +112,41 @@ class UploadsControllerTest < ActionDispatch::IntegrationTest
         end
       end
 
+      context "as_pending" do
+        setup do
+          @user = create(:user, created_at: 2.weeks.ago)
+          @janitor = create(:janitor_user)
+        end
+
+        context "for normal users" do
+          should "not work" do
+            assert_difference("Upload.count", 1) do
+              file = fixture_file_upload("test.jpg")
+              post_auth uploads_path, @user, params: { upload: { file: file, tag_string: "aaa", rating: "q", source: "aaa", as_pending: false }, format: :json }
+            end
+            assert_equal(true, Post.last.is_pending?)
+          end
+        end
+
+        context "for janitors" do
+          should "work" do
+            assert_difference("Upload.count", 1) do
+              file = fixture_file_upload("test.jpg")
+              post_auth uploads_path, @janitor, params: { upload: { file: file, tag_string: "aaa", rating: "q", source: "aaa", as_pending: false }, format: :json }
+            end
+            assert_equal(false, Post.last.is_pending?)
+          end
+
+          should "not approve if as_pending=true" do
+            assert_difference("Upload.count", 1) do
+              file = fixture_file_upload("test.jpg")
+              post_auth uploads_path, @janitor, params: { upload: { file: file, tag_string: "aaa", rating: "q", source: "aaa", as_pending: true }, format: :json }
+            end
+            assert_equal(true, Post.last.is_pending?)
+          end
+        end
+      end
+
       context "with a previously destroyed post" do
         setup do
           @admin = create(:admin_user)
