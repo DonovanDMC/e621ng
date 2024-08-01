@@ -26,7 +26,7 @@
  * Latest version of Docker ([download](https://docs.docker.com/get-docker)).
  * Latest version of Docker Compose ([download](https://docs.docker.com/compose/install))
  * Git ([download](https://git-scm.com/downloads))
- 
+
  If you are on Windows Docker Compose is already included, you do not need to install it yourself.
  If you are on Linux/MacOS you can probably use your package manager.
 
@@ -47,7 +47,7 @@
     ```
     docker exec -it e621ng-e621-1 /app/bin/populate
     ```
-    The command can be run multiple times to generate more content.  
+    The command can be run multiple times to generate more content.
     Environmental variables are available to customize what kind of content is generated.
 
 Note: When gems or js packages are updated you need to execute `docker compose build` to reflect them in the container.
@@ -105,3 +105,10 @@ correct.
 debug your Nginx configuration file.
 
 4) Check all log files.
+
+### Recommender
+To have recommendations, a user must have at least 50 favorites, and a post must have at least 5 favorites.
+The `bin/populate` script can be used to generate both users and favorites.
+
+To train the model, simply run:
+`docker compose run --rm recommender python -m poetry run python train`

@@ -1,0 +1,14 @@
+<div id="c-post-recommendations">
+  <div id="a-index">
+    <h1>Recommended Posts</h1>
+
+    <%= render "search" %>
+    <%= render "posts/partials/common/inline_blacklist" %>
+
+    <% @posts.each do |match| %>
+      <%= PostPresenter.preview(match, show_deleted: false, recommendation: true) %>
+    <% end %>
+  </div>
+</div>
+
+<%= render "posts/partials/common/secondary_links" %>

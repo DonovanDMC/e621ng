@@ -626,6 +626,9 @@ module Danbooru
     def iqdb_server
     end
 
+    def recommender_server
+    end
+
     def opensearch_host
     end
 

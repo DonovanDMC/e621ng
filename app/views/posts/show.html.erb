@@ -37,9 +37,13 @@
         <ul>
           <li><%= link_to "Sets with this post", post_sets_path(post_id: @post.id), rel: "nofollow" %></li>
           <% if IqdbProxy.enabled? && @post.has_preview? %>
-            <li><%= link_to "Visually similar on E6", iqdb_queries_path(search: { post_id: @post.id }), rel: "nofollow" %></li>
+            <li><%= link_to "Visually Similar", iqdb_queries_path(search: { post_id: @post.id }), rel: "nofollow" %></li>
+          <% end %>
+          <% if Recommender.enabled? && Recommender.available_for_post?(@post) %>
+            <li><%= link_to "Recommendations", post_recommendations_path(search: { post_id: @post.id }), rel: "nofollow" %></li>
           <% end %>
           <% if @post.visible? && @post.is_image? %>
+            <br>
             <li><a rel="nofollow" href="https://www.google.com/searchbyimage?image_url=<%= @post.reverse_image_url %>&client=e621">Reverse Google Search</a></li>
             <li><a rel="nofollow" href="https://saucenao.com/search.php?url=<%= @post.reverse_image_url %>">Reverse SauceNAO Search</a></li>
             <li><a rel="nofollow" href="https://derpibooru.org/search/reverse?url=<%= @post.reverse_image_url %>">Reverse Derpibooru Search</a></li>
