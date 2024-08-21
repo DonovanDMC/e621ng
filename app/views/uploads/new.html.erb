@@ -4,7 +4,7 @@
     <h2>Before uploading, read
       the <%= link_to "how to upload guide", wiki_page_path(id: "howto:upload") %>.</h2>
     <p>Make sure you're not posting something on
-      the <%= link_to "Avoid Posting List", help_page_path(id: 'avoid_posting') %><br>
+      the <%= link_to "Avoid Posting List", avoid_postings_path %><br>
       Review the <%= link_to "Uploading Guidelines", help_page_path(id: "uploading_guidelines") %>
       <br>
       Unsure what to tag your post
@@ -42,6 +42,7 @@
     allowRatingLock: <%= CurrentUser.is_privileged?.to_json %>,
     allowUploadAsPending: <%= CurrentUser.can_upload_free?.to_json %>,
     maxFileSize: <%= Danbooru.config.max_file_size %>,
+    maxFileSizeMap: <%= sanitize(Danbooru.config.max_file_sizes.to_json) %>,
   };
   Danbooru.Uploader.init();
 <% end -%>
